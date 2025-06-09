@@ -1,16 +1,26 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
+# Build Stage
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /app
 
-WORKDIR /jenkins-plugin-model/src
+# Copy csproj files first (for faster layer caching)
 COPY jenkins-plugin-model/src/Pi.Math/Pi.Math.csproj ./Pi.Math/
 COPY jenkins-plugin-model/src/Pi.Runtime/Pi.Runtime.csproj ./Pi.Runtime/
 COPY jenkins-plugin-model/src/Pi.Web/Pi.Web.csproj ./Pi.Web/
 
-WORKDIR /jenkins-plugin-model//src/Pi.Web
-RUN dotnet restore
+# Restore dependencies
+RUN dotnet restore ./Pi.Web/Pi.Web.csproj
 
-# app image
-FROM mcr.microsoft.com/dotnet/aspnet:7.0
+# Copy the rest of the source code
+COPY jenkins-plugin-model/src ./ 
+
+# Build the app
+WORKDIR /app/Pi.Web
+RUN dotnet publish -c Release -o out
+
+# Runtime Stage
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+WORKDIR /app
+COPY --from=build /app/Pi.Web/out ./
 
 EXPOSE 80
 ENTRYPOINT ["dotnet", "Pi.Web.dll"]
-CMD ["-m", "console", "-dp", "6"]
